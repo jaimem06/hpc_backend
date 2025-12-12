@@ -12,6 +12,7 @@ router = APIRouter()
 @router.post("/submit/", response_model=dict)
 async def submit_file_job(file: UploadFile = File(...)):
     file_location = f"uploads/{file.filename}"
+    print(f"[UPLOAD] IP: {settings.SERVER_IP} | Archivo: {file_location}")
 
     with open(file_location, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)

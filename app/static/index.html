@@ -58,7 +58,6 @@
 
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('dashboard')">PANEL PRINCIPAL</button>
-      <button class="tab-btn" onclick="switchTab('logs')">LOGS DEL SISTEMA</button>
       <button class="tab-btn" onclick="switchTab('history')">HISTORIAL</button>
     </div>
 
@@ -101,14 +100,7 @@
         </div>
       </div>
 
-      <!-- LOGS -->
-      <div id="logs" class="tab-pane">
-        <h2 style="border:none; margin-bottom: 10px;">Salida de Workers en Vivo</h2>
-        <div class="terminal-window" id="terminal-output">
-          <div class="log-entry"><span class="log-time">--:--:--</span><span class="log-worker">SISTEMA</span><span
-              class="log-msg">Conectando al stream de logs...</span></div>
-        </div>
-      </div>
+
 
       <!-- HISTORIAL -->
       <div id="history" class="tab-pane">

@@ -1,46 +1,30 @@
 const API_URL = "/api";
-let logsInterval = null;
+
 
 document.addEventListener('DOMContentLoaded', () => {
     fetchClusterStatus();
     fetchJobs();
-    fetchLogs();
 
+    // Auto refresh
     setInterval(fetchClusterStatus, 3000);
     setInterval(fetchJobs, 5000);
-    logsInterval = setInterval(fetchLogs, 2000);
 });
 
 // --- UI TABS ---
 function switchTab(tabId) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
-
+    // 1. Activate Pane
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-}
+    const pane = document.getElementById(tabId);
+    if (pane) pane.classList.add('active');
 
-// --- LOGS ---
-async function fetchLogs() {
-    try {
-        const res = await fetch(`${API_URL}/logs/live?limit=50`);
-        const logs = await res.json();
-
-        const term = document.getElementById('terminal-output');
-        term.innerHTML = '';
-
-        logs.forEach(log => {
-            const div = document.createElement('div');
-            div.className = 'log-entry';
-            const isError = log.level === 'ERROR' ? 'error' : '';
-            div.innerHTML = `
-                <span class="log-time">${log.dt_string}</span>
-                <span class="log-worker">[${log.worker}]</span>
-                <span class="log-msg ${isError}">${log.message}</span>
-            `;
-            term.appendChild(div);
-        });
-    } catch (e) { console.error("Error logs", e); }
+    // 2. Activate Button
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active');
+        // Auto-select the button that points to this tab
+        if (b.getAttribute('onclick').includes(`'${tabId}'`)) {
+            b.classList.add('active');
+        }
+    });
 }
 
 // --- JOBS & STATUS ---
@@ -62,8 +46,11 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
             msg.innerText = "✔ Desplegado exitosamente";
             fetchJobs();
             switchTab('history');
-        } else msg.innerText = "Error al subir";
-    } catch (e) { msg.innerText = "Error conexión"; }
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            msg.innerText = `Error al subir: ${errData.detail || res.statusText}`;
+        }
+    } catch (e) { msg.innerText = `Error conexión: ${e.message}`; }
 });
 
 // 2. Submit Math
@@ -84,9 +71,11 @@ async function submitPrimeJob() {
         if (res.ok) {
             msg.innerText = `✔ ${data.msg}`;
             fetchJobs();
-            switchTab('logs');
+            switchTab('history');
+        } else {
+            msg.innerText = `Error iniciado: ${data.detail || res.statusText}`;
         }
-    } catch (e) { msg.innerText = "Error"; }
+    } catch (e) { msg.innerText = `Error: ${e.message}`; }
 }
 
 // 3. Status (Worker Details)
