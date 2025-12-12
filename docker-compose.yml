@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: hpc_backend
+    ports:
+      - "8000:8000"  # Acceso al API
+    volumes:
+      - .:/app       # Permite editar código en Windows y verlo en Docker sin reiniciar
+    environment:
+      - REDIS_URL=redis://redis_broker:6379/0
+      - MONGO_URI=mongodb://mongo_db:27017
+      - MONGO_DB_NAME=hpc_cluster_db
+      - SERVER_IP=0.0.0.0
+    depends_on:
+      - redis_broker
+      - mongo_db
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # 2. Redis (Gestor de Colas)
+  redis_broker:
+    image: redis:alpine
+    container_name: hpc_redis
+    ports:
+      - "6379:6379" # Exponemos puerto.
+
+  # 3. MongoDB (Base de Datos)
+  mongo_db:
+    image: mongo:latest
+    container_name: hpc_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db # No perder datos al apagar.
+
+volumes:
+  mongo_data:

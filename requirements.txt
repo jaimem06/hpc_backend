@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+motor
+pydantic
+pydantic-settings
+python-dotenv
+celery[redis]
+requests
+watchfiles
