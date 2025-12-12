@@ -1,114 +1,171 @@
-const API_URL = ""; // Relativo al mismo dominio
+const API_URL = "/api";
+let logsInterval = null;
 
-// Cargar datos al iniciar
 document.addEventListener('DOMContentLoaded', () => {
     fetchClusterStatus();
     fetchJobs();
-    
-    // Auto-actualizar cada 3 segundos
+    fetchLogs();
+
     setInterval(fetchClusterStatus, 3000);
     setInterval(fetchJobs, 5000);
+    logsInterval = setInterval(fetchLogs, 2000);
 });
 
-// 1. Manejo de Subida de Archivos
-const fileInput = document.getElementById('file-input');
-const uploadMsg = document.getElementById('upload-msg');
+// --- UI TABS ---
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
 
-fileInput.addEventListener('change', async (e) => {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+}
+
+// --- LOGS ---
+async function fetchLogs() {
+    try {
+        const res = await fetch(`${API_URL}/logs/live?limit=50`);
+        const logs = await res.json();
+
+        const term = document.getElementById('terminal-output');
+        term.innerHTML = '';
+
+        logs.forEach(log => {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            const isError = log.level === 'ERROR' ? 'error' : '';
+            div.innerHTML = `
+                <span class="log-time">${log.dt_string}</span>
+                <span class="log-worker">[${log.worker}]</span>
+                <span class="log-msg ${isError}">${log.message}</span>
+            `;
+            term.appendChild(div);
+        });
+    } catch (e) { console.error("Error logs", e); }
+}
+
+// --- JOBS & STATUS ---
+
+// 1. Submit File
+document.getElementById('file-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    const msg = document.getElementById('upload-msg');
+
+    msg.innerText = "Desplegando...";
 
     const formData = new FormData();
     formData.append('file', file);
 
-    uploadMsg.innerText = "Subiendo y distribuyendo...";
-    
     try {
-        const res = await fetch('/submit-job/', {
-            method: 'POST',
-            body: formData
-        });
-        const data = await res.json();
-        
+        const res = await fetch(`${API_URL}/files/submit/`, { method: 'POST', body: formData });
         if (res.ok) {
-            uploadMsg.innerHTML = `<span style="color:green">✔ Enviado al Cluster (ID: ${data.task_id.substring(0,8)}...)</span>`;
-            fetchJobs(); // Actualizar tabla
-        } else {
-            uploadMsg.innerText = "Error al subir.";
-        }
-    } catch (err) {
-        uploadMsg.innerText = "Error de conexión.";
-    }
+            msg.innerText = "✔ Desplegado exitosamente";
+            fetchJobs();
+            switchTab('history');
+        } else msg.innerText = "Error al subir";
+    } catch (e) { msg.innerText = "Error conexión"; }
 });
 
-// 2. Estado del Cluster
+// 2. Submit Math
+async function submitPrimeJob() {
+    const start = document.getElementById('prime-start').value;
+    const end = document.getElementById('prime-end').value;
+    const msg = document.getElementById('computation-msg');
+
+    msg.innerText = "Dividiendo y asignando tareas...";
+
+    try {
+        const res = await fetch(`${API_URL}/computation/submit/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start_range: parseInt(start), end_range: parseInt(end) })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            msg.innerText = `✔ ${data.msg}`;
+            fetchJobs();
+            switchTab('logs');
+        }
+    } catch (e) { msg.innerText = "Error"; }
+}
+
+// 3. Status (Worker Details)
 async function fetchClusterStatus() {
     try {
         const res = await fetch('/cluster/status');
         const data = await res.json();
-        
-        const nodesDiv = document.getElementById('nodes-list');
-        const activeCount = document.getElementById('active-count');
-        const tasksCount = document.getElementById('tasks-count');
 
-        // Actualizar contadores
-        activeCount.innerText = data.total_nodes || 0;
-        
-        // Calcular tareas (formato de celery es complejo, simplificamos)
-        let totalTasks = 0;
-        if(data.tasks_running){
-             totalTasks = Object.values(data.tasks_running).flat().length;
-        }
-        tasksCount.innerText = totalTasks;
+        document.getElementById('online-nodes').innerText = data.total_nodes || 0;
 
-        // Renderizar Nodos
-        nodesDiv.innerHTML = '';
-        if (data.online_nodes && data.online_nodes.length > 0) {
-            data.online_nodes.forEach(node => {
-                const chip = document.createElement('div');
-                chip.className = 'node-chip active';
-                chip.innerText = node;
-                nodesDiv.appendChild(chip);
-            });
-        } else {
-            nodesDiv.innerHTML = '<span style="color:#999">No hay workers conectados.</span>';
+        let total = 0;
+        if (data.tasks_running) total = Object.values(data.tasks_running).flat().length;
+        document.getElementById('active-tasks').innerText = total;
+
+        const cont = document.getElementById('nodes-container');
+        cont.innerHTML = '';
+
+        const activeTasksMap = data.tasks_running || {};
+
+        if (!data.online_nodes || data.online_nodes.length === 0) {
+            cont.innerHTML = '<span style="color:#666; font-size:0.8rem">No hay workers conectados.</span>';
+            return;
         }
 
-    } catch (err) {
-        console.error("Error fetching status", err);
-    }
+        // Render card detallada por worker
+        data.online_nodes.forEach(nodeName => {
+            const tasks = activeTasksMap[nodeName] || [];
+            const taskCount = tasks.length;
+            const statusLabel = taskCount > 0 ? "OCUPADO" : "IDLE";
+            const statusColor = taskCount > 0 ? "#FFC107" : "#00C853"; // Amarillo vs Verde
+
+            // Generar ID corto
+            const shortId = nodeName.includes("@") ? nodeName.split("@")[1] : nodeName;
+
+            const div = document.createElement('div');
+            div.className = 'worker-card';
+            div.innerHTML = `
+                <div class="worker-info">
+                    <h4>${nodeName}</h4>
+                    <small>ID: ${shortId}</small>
+                </div>
+                <div class="worker-stats">
+                     <span class="worker-badge" style="color: ${statusColor}">${statusLabel}</span>
+                     <div style="font-size:0.75rem; color:#888; margin-top:2px;">Tareas: ${taskCount}</div>
+                </div>
+            `;
+            cont.appendChild(div);
+        });
+    } catch (e) { }
 }
 
-// 3. Historial de Trabajos
+// 4. History
 async function fetchJobs() {
     try {
-        const res = await fetch('/api/jobs');
+        const res = await fetch(`${API_URL}/jobs/`);
         const jobs = await res.json();
-        
         const tbody = document.getElementById('jobs-table');
         tbody.innerHTML = '';
 
-        jobs.forEach(job => {
+        jobs.forEach(j => {
             const tr = document.createElement('tr');
+            let action = '';
+            if (j.download_url) action = `<a href="${j.download_url}" style="color:#FFF">⬇ BAJAR</a>`;
 
-            let downloadLink = '<span style="color:#ccc">...</span>';
-            if (job.download_url) {
-                downloadLink = `
-                    <a href="${job.download_url}" target="_blank" class="btn-download">
-                        ⬇ Descargar
-                    </a>
-                `;
-            }
+            // Traducir estados
+            let displayStatus = j.status;
+            if (j.status === 'queued') displayStatus = 'EN COLA';
+            if (j.status === 'completed') displayStatus = 'COMPLETADO';
+            if (j.status === 'processing') displayStatus = 'PROCESANDO';
+            if (j.status === 'failed') displayStatus = 'FALLIDO';
 
             tr.innerHTML = `
-                <td style="font-weight:600">${job.filename}</td>
-                <td><span class="status-badge status-${job.status}">${job.status}</span></td>
-                <td style="color:#666">${job.worker || 'Esperando...'}</td>
-                <td>${downloadLink}</td>
+                <td>${j.filename}</td>
+                <td style="font-size:0.8rem; color:#888">${j.type === 'computation' ? 'Cálculo' : 'Archivo'}</td>
+                <td><span class="status-badge status-${j.status}">${displayStatus}</span></td>
+                <td>${j.worker}</td>
+                <td>${action}</td>
             `;
             tbody.appendChild(tr);
         });
-    } catch (err) {
-        console.error("Error cargando historial", err);
-    }
+    } catch (e) { }
 }

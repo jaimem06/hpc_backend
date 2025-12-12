@@ -1,4 +1,5 @@
 from app.core.celery_app import celery_app
+from app.services.logger import logger
 import time
 import requests
 import os
@@ -6,7 +7,7 @@ import os
 @celery_app.task(bind=True, name="process_pdf_task")
 def process_pdf_task(self, filename: str, download_url: str):
     worker_name = self.request.hostname
-    print(f"[{worker_name}] 📥 Iniciando descarga: {filename}")
+    logger.log(worker_name, f"📥 Iniciando descarga: {filename}")
     
     os.makedirs("temp_worker", exist_ok=True)
     local_path = f"temp_worker/{filename}"
@@ -23,8 +24,9 @@ def process_pdf_task(self, filename: str, download_url: str):
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-        print(f"[{worker_name}] || Descarga completa ({os.path.getsize(local_path)} bytes). Procesando...")
+        logger.log(worker_name, f"|| Descarga completa ({os.path.getsize(local_path)} bytes). Procesando...")
         
+        # Simula procesamiento
         time.sleep(5) 
         
         if os.path.exists(local_path):
@@ -37,8 +39,8 @@ def process_pdf_task(self, filename: str, download_url: str):
         }
 
     except requests.exceptions.HTTPError as e:
-        print(f"|| Error HTTP al descargar: {e}")
+        logger.log(worker_name, f"|| Error HTTP al descargar: {e}", "ERROR")
         return {"status": "failed", "error": f"Error de red: {str(e)}"}
     except Exception as e:
-        print(f"|| Error crítico: {e}")
+        logger.log(worker_name, f"|| Error crítico: {e}", "ERROR")
         return {"status": "failed", "error": str(e)}

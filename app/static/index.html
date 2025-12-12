@@ -4,64 +4,128 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cluster HPC</title>
+  <title>Panel de Control HPC</title>
   <link rel="stylesheet" href="/static/style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono&display=swap"
+    rel="stylesheet">
+  <style>
+    /* Estilos extra para los workers detallados */
+    .worker-card {
+      background: #2D2D2D;
+      border: 1px solid #333;
+      padding: 10px;
+      margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-left: 3px solid var(--success);
+    }
+
+    .worker-info h4 {
+      margin: 0;
+      font-size: 0.85rem;
+      color: #fff;
+    }
+
+    .worker-info small {
+      color: #888;
+      font-size: 0.7rem;
+    }
+
+    .worker-stats {
+      text-align: right;
+    }
+
+    .worker-badge {
+      background: #000;
+      color: var(--success);
+      padding: 2px 6px;
+      font-size: 0.7rem;
+      border-radius: 2px;
+    }
+  </style>
 </head>
 
 <body>
   <div class="container">
     <header>
-      <div class="logo">HPC <span>NODE MANAGER</span></div>
-      <div class="status-indicator" id="system-status">
-        <span class="dot"></span> ONLINE
+      <div class="logo">HPC <span>CONTROL DE CLUSTER</span></div>
+      <div class="system-status">
+        <div><span class="status-dot"></span> WORKERS: <span id="online-nodes">0</span></div>
+        <div>TAREAS: <span id="active-tasks">0</span></div>
       </div>
     </header>
-    <div class="dashboard-grid">
-      <div class="card upload-card">
-        <h2>Nuevo Procesamiento</h2>
-        <div class="upload-area" id="drop-zone">
-          <input type="file" id="file-input" hidden>
-          <p>Arrastra tu PDF aquí o haz clic</p>
-          <button class="btn-black" onclick="document.getElementById('file-input').click()">Seleccionar Archivo</button>
-        </div>
-        <div id="upload-msg"></div>
-      </div>
 
-      <div class="card cluster-card">
-        <h2>Nodos Activos</h2>
-        <div id="nodes-list" class="nodes-container">
-          <p class="loading-text">Escaneando red...</p>
-        </div>
-        <div class="stats">
-          <div class="stat-item">
-            <span id="active-count">0</span>
-            <label>Workers</label>
-          </div>
-          <div class="stat-item">
-            <span id="tasks-count">0</span>
-            <label>Tareas</label>
-          </div>
-        </div>
-      </div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('dashboard')">PANEL PRINCIPAL</button>
+      <button class="tab-btn" onclick="switchTab('logs')">LOGS DEL SISTEMA</button>
+      <button class="tab-btn" onclick="switchTab('history')">HISTORIAL</button>
     </div>
 
-    <div class="card history-card">
-      <h2>Historial de Ejecución</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Archivo</th>
-            <th>Estado</th>
-            <th>Worker</th>
-            <th>ID Tarea</th>
-          </tr>
-        </thead>
-        <tbody id="jobs-table">
-        </tbody>
-      </table>
-    </div>
-    <div class="card history-card">
+    <div class="main-content">
+      <!-- PANEL PRINCIPAL -->
+      <div id="dashboard" class="tab-pane active">
+        <div class="dashboard-grid">
+          <!-- Tarjeta: Procesamiento Archivos -->
+          <div class="card">
+            <h2>Procesamiento de Archivos</h2>
+            <p style="font-size: 0.8rem; color: #888; margin-bottom: 20px;">
+              Sube Datasets grandes o PDFs para distribuirlos entre los nodos.
+            </p>
+            <input type="file" id="file-input" hidden>
+            <button class="btn-action" onclick="document.getElementById('file-input').click()">SUBIR ARCHIVO</button>
+            <div id="upload-msg" style="margin-top:10px; font-size: 0.8rem;"></div>
+          </div>
+
+          <!-- Tarjeta: Cálculo Matemático -->
+          <div class="card">
+            <h2>Computación Distribuida</h2>
+            <p style="font-size: 0.8rem; color: #888; margin-bottom: 10px;">
+              Lanzar búsqueda distribuida de Números Primos.
+            </p>
+            <div style="display: flex; gap: 10px;">
+              <input type="number" id="prime-start" placeholder="Inicio" value="1">
+              <input type="number" id="prime-end" placeholder="Fin" value="100000">
+            </div>
+            <button class="btn-action" onclick="submitPrimeJob()">EJECUTAR TRABAJO</button>
+            <div id="computation-msg" style="margin-top:10px; font-size: 0.8rem;"></div>
+          </div>
+
+          <!-- Tarjeta: Estado del Sistema -->
+          <div class="card">
+            <h2>Estado de los Nodos</h2>
+            <div id="nodes-container">
+              <!-- Los workers se renderizan aquí -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOGS -->
+      <div id="logs" class="tab-pane">
+        <h2 style="border:none; margin-bottom: 10px;">Salida de Workers en Vivo</h2>
+        <div class="terminal-window" id="terminal-output">
+          <div class="log-entry"><span class="log-time">--:--:--</span><span class="log-worker">SISTEMA</span><span
+              class="log-msg">Conectando al stream de logs...</span></div>
+        </div>
+      </div>
+
+      <!-- HISTORIAL -->
+      <div id="history" class="tab-pane">
+        <table>
+          <thead>
+            <tr>
+              <th>ARCHIVO/TRABAJO</th>
+              <th>TIPO</th>
+              <th>ESTADO</th>
+              <th>WORKER</th>
+              <th>ACCIÓN</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-table"></tbody>
+        </table>
+      </div>
+
     </div>
   </div>
 
