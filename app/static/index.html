@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cluster HPC</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">HPC <span>NODE MANAGER</span></div>
+      <div class="status-indicator" id="system-status">
+        <span class="dot"></span> ONLINE
+      </div>
+    </header>
+    <div class="dashboard-grid">
+      <div class="card upload-card">
+        <h2>Nuevo Procesamiento</h2>
+        <div class="upload-area" id="drop-zone">
+          <input type="file" id="file-input" hidden>
+          <p>Arrastra tu PDF aquí o haz clic</p>
+          <button class="btn-black" onclick="document.getElementById('file-input').click()">Seleccionar Archivo</button>
+        </div>
+        <div id="upload-msg"></div>
+      </div>
+
+      <div class="card cluster-card">
+        <h2>Nodos Activos</h2>
+        <div id="nodes-list" class="nodes-container">
+          <p class="loading-text">Escaneando red...</p>
+        </div>
+        <div class="stats">
+          <div class="stat-item">
+            <span id="active-count">0</span>
+            <label>Workers</label>
+          </div>
+          <div class="stat-item">
+            <span id="tasks-count">0</span>
+            <label>Tareas</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card history-card">
+      <h2>Historial de Ejecución</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Archivo</th>
+            <th>Estado</th>
+            <th>Worker</th>
+            <th>ID Tarea</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-table">
+        </tbody>
+      </table>
+    </div>
+    <div class="card history-card">
+    </div>
+  </div>
+
+  <script src="/static/script.js"></script>
+</body>
+
+</html>

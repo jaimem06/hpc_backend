@@ -5112,3 +5112,4 @@ app/core/__pycache__/database.cpython-39.pyc
 app/core/__pycache__/database.cpython-311.pyc
 app/services/__pycache__/monitor.cpython-39.pyc
 app/services/__pycache__/monitor.cpython-311.pyc
+.env

@@ -12,7 +12,7 @@ services:
       - REDIS_URL=redis://redis_broker:6379/0
       - MONGO_URI=mongodb://mongo_db:27017
       - MONGO_DB_NAME=hpc_cluster_db
-      - SERVER_IP=0.0.0.0
+      - SERVER_IP=192.168.1.8
     depends_on:
       - redis_broker
       - mongo_db
