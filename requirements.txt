@@ -1,3 +1,6 @@
+celery[redis]
+requests
+watchfiles
 fastapi
 uvicorn
 python-multipart
@@ -5,6 +8,6 @@ motor
 pydantic
 pydantic-settings
 python-dotenv
-celery[redis]
-requests
-watchfiles
+# --- Librerías para soporte GPU ---
+cupy-cuda11x
+pycuda
