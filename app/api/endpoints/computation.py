@@ -62,9 +62,19 @@ async def get_job_status(job_id: str):
         return {"status": "unknown"}
     
     # Verificar progreso
-    if group_res.ready():
+    ready = group_res.ready()
+    completed = group_res.completed_count()
+    total = len(group_res.children) if group_res.children else job_info["total_chunks"]
+    
+    print(f"Job {job_id}: ready={ready}, completed={completed}/{total}")
+
+    if ready or completed >= total:
         # Todo terminado
-        results = group_res.get()
+        try:
+            results = group_res.join()
+        except:
+             results = group_res.get()
+             
         # Verificar errores
         if any(r.get("status") == "failed" for r in results):
             return {"status": "failed", "details": results}
@@ -97,11 +107,9 @@ async def get_job_status(job_id: str):
         }
     else:
         # En progreso
-        # completed_count() is flaky sometimes, better calculate from children
-        # But for group result we need backend to support it. 
-        # Using simple running estimate
+        progress = int((completed / total) * 100) if total > 0 else 0
         return {
             "status": "processing",
-            "progress": 50, # Fake progress if not ready
+            "progress": progress, 
             "total_chunks": job_info["total_chunks"]
         }

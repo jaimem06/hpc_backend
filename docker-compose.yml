@@ -12,7 +12,7 @@ services:
     networks:
       - app-network
 
-  redis_broker:
+  redis:
     image: redis:alpine
     container_name: hpc_redis
     ports:
@@ -20,7 +20,7 @@ services:
     networks:
       - app-network
 
-  mongo_db:
+  mongo:
     ports:
       - "27017:27017"
     networks:
