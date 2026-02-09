@@ -9,6 +9,7 @@ import uuid
 import base64
 import time
 import asyncio
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 
@@ -75,36 +76,49 @@ async def get_job_status(job_id: str):
         except:
              results = group_res.get()
              
+    if ready or completed >= total:
+        # Todo terminado
+        try:
+             results = group_res.join()
+        except:
+             results = group_res.get()
+             
         # Verificar errores
         if any(r.get("status") == "failed" for r in results):
+            print(f"Job {job_id} failed: {results}")
             return {"status": "failed", "details": results}
             
-        # Unir imagen
-        final_img_bytes = ImageProcessor.merge_images(results)
-        
-        # Calcular stats
-        total_gpu = sum(r.get("gpu_time", 0) for r in results)
-        workers_used = list(set(r.get("worker") for r in results))
-        
-        return {
-            "status": "completed",
-            "progress": 100,
-            "result_image": final_img_bytes.decode('latin1'), # Enviar como raw bytes string (o base64 en pydantic)
-            # Mejor enviemos base64 para simpleza en frontend
-            "result_b64": str(final_img_bytes, 'latin1') if False else None, # Hack, mejor recodificar
-            "stats": {
-                "total_gpu_time": total_gpu,
-                "workers": list(workers_used) # Fix set json serialization
-            },
-            "chunks_data": [
-                {
-                    "worker": r.get("worker"), 
-                    "gpu_time": r.get("gpu_time"),
-                    "device": r.get("device"),
-                    "index": r.get("index")
-                } for r in results 
-            ] # Send metadata only, not image data
-        }
+        def process_results_sync(results):
+            # Unir imagen (Bloqueante)
+            final_img_bytes = ImageProcessor.merge_images(results)
+            b64_str = base64.b64encode(final_img_bytes).decode('utf-8')
+            
+            # Calcular stats
+            total_gpu = sum(r.get("gpu_time", 0) for r in results)
+            workers_used = list(set(r.get("worker") for r in results))
+            
+            return {
+                "status": "completed",
+                "progress": 100,
+                "result_b64": b64_str,
+                "stats": {
+                    "total_gpu_time": total_gpu,
+                    "workers": workers_used
+                },
+                "chunks_data": [
+                    {
+                        "worker": r.get("worker"), 
+                        "gpu_time": r.get("gpu_time"),
+                        "device": r.get("device"),
+                        "index": r.get("index")
+                    } for r in results 
+                ]
+            }
+
+        print(f"Job {job_id}: merging images in threadpool...")
+        response = await run_in_threadpool(process_results_sync, results)
+        print(f"Job {job_id}: returning response status={response['status']}")
+        return response
     else:
         # En progreso
         progress = int((completed / total) * 100) if total > 0 else 0
