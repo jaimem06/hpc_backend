@@ -5,7 +5,7 @@ celery_app = Celery(
     "hpc_cluster",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.worker.pdf_tasks", "app.worker.math_tasks"]
+    include=["app.worker.gpu_tasks"]
 )
 
 celery_app.conf.update(

@@ -1,160 +1,157 @@
 const API_URL = "/api";
 
-
 document.addEventListener('DOMContentLoaded', () => {
+    // Poll basic worker usage
+    setInterval(fetchClusterStatus, 5000);
     fetchClusterStatus();
-    fetchJobs();
-
-    // Auto refresh
-    setInterval(fetchClusterStatus, 3000);
-    setInterval(fetchJobs, 5000);
 });
 
-// --- UI TABS ---
-function switchTab(tabId) {
-    // 1. Activate Pane
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    const pane = document.getElementById(tabId);
-    if (pane) pane.classList.add('active');
-
-    // 2. Activate Button
-    document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.remove('active');
-        // Auto-select the button that points to this tab
-        if (b.getAttribute('onclick').includes(`'${tabId}'`)) {
-            b.classList.add('active');
-        }
-    });
+// --- CLUSTER STATUS ---
+async function fetchClusterStatus() {
+    try {
+        const res = await fetch('/cluster/status');
+        const data = await res.json();
+        const total = data.online_nodes ? data.online_nodes.length : 0;
+        document.getElementById('online-nodes').innerText = total;
+    } catch (e) { }
 }
 
-// --- JOBS & STATUS ---
-
-// 1. Submit File
+// --- FILE UPLOAD LOGIC ---
 document.getElementById('file-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const msg = document.getElementById('upload-msg');
 
-    msg.innerText = "Desplegando...";
+    // Show Preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('input-preview').src = e.target.result;
+        document.getElementById('input-info').innerText = `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+
+        // Show Process UI
+        document.getElementById('process-card').style.display = 'block';
+        document.getElementById('upload-card').style.display = 'none';
+
+        // Start Process
+        startDistributedJob(file);
+    };
+    reader.readAsDataURL(file);
+});
+
+
+async function startDistributedJob(file) {
+    const chunks = document.getElementById('chunk-select').value;
+    const statusText = document.getElementById('cluster-status-text');
+    const workersGrid = document.getElementById('workers-grid');
+
+    statusText.innerText = `Subiendo y dividiendo en ${chunks} partes...`;
+    statusText.style.color = '#FFF';
+
+    workersGrid.innerHTML = '';
+
+    // Create initial placeholders
+    for (let i = 0; i < chunks; i++) {
+        const div = document.createElement('div');
+        div.className = 'worker-node';
+        div.id = `chunk-node-${i}`;
+        div.innerText = `Chunk ${i}: Pendiente`;
+        div.style.background = '#333';
+        workersGrid.appendChild(div);
+    }
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-        const res = await fetch(`${API_URL}/files/submit/`, { method: 'POST', body: formData });
-        if (res.ok) {
-            msg.innerText = "✔ Desplegado exitosamente";
-            fetchJobs();
-            switchTab('history');
-        } else {
-            const errData = await res.json().catch(() => ({}));
-            msg.innerText = `Error al subir: ${errData.detail || res.statusText}`;
-        }
-    } catch (e) { msg.innerText = `Error conexión: ${e.message}`; }
-});
-
-// 2. Submit Math
-async function submitPrimeJob() {
-    const start = document.getElementById('prime-start').value;
-    const end = document.getElementById('prime-end').value;
-    const msg = document.getElementById('computation-msg');
-
-    msg.innerText = "Dividiendo y asignando tareas...";
-
-    try {
-        const res = await fetch(`${API_URL}/computation/submit/`, {
+        // 1. Submit Job
+        const res = await fetch(`${API_URL}/computation/process-image?chunks=${chunks}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ start_range: parseInt(start), end_range: parseInt(end) })
+            body: formData
         });
+
+        if (!res.ok) throw new Error("Error subiendo imagen");
+
         const data = await res.json();
-        if (res.ok) {
-            msg.innerText = `✔ ${data.msg}`;
-            fetchJobs();
-            switchTab('history');
-        } else {
-            msg.innerText = `Error iniciado: ${data.detail || res.statusText}`;
-        }
-    } catch (e) { msg.innerText = `Error: ${e.message}`; }
+        const jobId = data.job_id;
+
+        statusText.innerText = "Distribuido. Procesando en GPU...";
+        statusText.style.color = '#FFC107'; // Warning color (Yellow)
+
+        // 2. Poll Status
+        pollJobStatus(jobId);
+
+    } catch (e) {
+        statusText.innerText = `Error: ${e.message}`;
+        statusText.style.color = 'red';
+    }
 }
 
-// 3. Status (Worker Details)
-async function fetchClusterStatus() {
-    try {
-        const res = await fetch('/cluster/status');
-        const data = await res.json();
+async function pollJobStatus(jobId) {
+    const interval = setInterval(async () => {
+        try {
+            const res = await fetch(`${API_URL}/computation/job/${jobId}`);
+            const job = await res.json();
 
-        document.getElementById('online-nodes').innerText = data.total_nodes || 0;
+            if (job.status === 'completed') {
+                clearInterval(interval);
+                renderResults(job);
+            } else if (job.status === 'failed') {
+                clearInterval(interval);
+                alert("Job Failed!");
+            } else {
+                // Update Progress (fake visual)
+                document.getElementById('cluster-status-text').innerText = `Procesando... ${job.progress || 0}%`;
+            }
 
-        let total = 0;
-        if (data.tasks_running) total = Object.values(data.tasks_running).flat().length;
-        document.getElementById('active-tasks').innerText = total;
-
-        const cont = document.getElementById('nodes-container');
-        cont.innerHTML = '';
-
-        const activeTasksMap = data.tasks_running || {};
-
-        if (!data.online_nodes || data.online_nodes.length === 0) {
-            cont.innerHTML = '<span style="color:#666; font-size:0.8rem">No hay workers conectados.</span>';
-            return;
+        } catch (e) {
+            console.error(e);
         }
-
-        // Render card detallada por worker
-        data.online_nodes.forEach(nodeName => {
-            const tasks = activeTasksMap[nodeName] || [];
-            const taskCount = tasks.length;
-            const statusLabel = taskCount > 0 ? "OCUPADO" : "IDLE";
-            const statusColor = taskCount > 0 ? "#FFC107" : "#00C853"; // Amarillo vs Verde
-
-            // Generar ID corto
-            const shortId = nodeName.includes("@") ? nodeName.split("@")[1] : nodeName;
-
-            const div = document.createElement('div');
-            div.className = 'worker-card';
-            div.innerHTML = `
-                <div class="worker-info">
-                    <h4>${nodeName}</h4>
-                    <small>ID: ${shortId}</small>
-                </div>
-                <div class="worker-stats">
-                     <span class="worker-badge" style="color: ${statusColor}">${statusLabel}</span>
-                     <div style="font-size:0.75rem; color:#888; margin-top:2px;">Tareas: ${taskCount}</div>
-                </div>
-            `;
-            cont.appendChild(div);
-        });
-    } catch (e) { }
+    }, 1000);
 }
 
-// 4. History
-async function fetchJobs() {
-    try {
-        const res = await fetch(`${API_URL}/jobs/`);
-        const jobs = await res.json();
-        const tbody = document.getElementById('jobs-table');
-        tbody.innerHTML = '';
+function renderResults(job) {
+    // Status Text
+    const statusText = document.getElementById('cluster-status-text');
+    statusText.innerText = "¡Completado!";
+    statusText.style.color = '#00C853'; // Success Green
 
-        jobs.forEach(j => {
-            const tr = document.createElement('tr');
-            let action = '';
-            if (j.download_url) action = `<a href="${j.download_url}" style="color:#FFF">⬇ BAJAR</a>`;
+    // Render Output Image
+    const outImg = document.getElementById('output-preview');
+    // Si viene como base64 string directo
+    outImg.src = `data:image/png;base64,${job.result_b64}`;
+    outImg.style.display = 'block';
 
-            // Traducir estados
-            let displayStatus = j.status;
-            if (j.status === 'queued') displayStatus = 'EN COLA';
-            if (j.status === 'completed') displayStatus = 'COMPLETADO';
-            if (j.status === 'processing') displayStatus = 'PROCESANDO';
-            if (j.status === 'failed') displayStatus = 'FALLIDO';
+    // Stats
+    document.getElementById('stat-gpu').innerText = job.stats.total_gpu_time.toFixed(4) + "s";
+    document.getElementById('stat-workers').innerText = job.stats.workers.length;
+    document.getElementById('stat-status').innerText = "DONE";
 
-            tr.innerHTML = `
-                <td>${j.filename}</td>
-                <td style="font-size:0.8rem; color:#888">${j.type === 'computation' ? 'Cálculo' : 'Archivo'}</td>
-                <td><span class="status-badge status-${j.status}">${displayStatus}</span></td>
-                <td>${j.worker}</td>
-                <td>${action}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (e) { }
+    // Details Table
+    const tbody = document.getElementById('chunk-details-body');
+    tbody.innerHTML = '';
+
+    const workersGrid = document.getElementById('workers-grid');
+    workersGrid.innerHTML = ''; // Rebuild with final info
+
+    job.chunks_data.forEach(chunk => {
+        // Table Row
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${chunk.index}</td>
+            <td>${chunk.worker}</td>
+            <td style="color:#00C853">${chunk.gpu_time.toFixed(4)}s</td>
+            <td>${chunk.device}</td>
+        `;
+        tbody.appendChild(tr);
+
+        // Grid Box
+        const div = document.createElement('div');
+        div.className = 'worker-node';
+        div.style.border = '1px solid #00C853';
+        div.innerHTML = `
+            <div style="color:#fff">Chunk ${chunk.index}</div>
+            <div style="font-size:0.6rem; color:#aaa">${chunk.worker}</div>
+            <div style="font-size:0.6rem; color:#00C853">GPU: ${chunk.gpu_time.toFixed(3)}s</div>
+        `;
+        workersGrid.appendChild(div);
+    });
 }

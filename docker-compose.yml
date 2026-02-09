@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build: .
@@ -8,32 +6,33 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+    runtime: nvidia # Añadido para usar el runtime de NVIDIA
     environment:
-      - REDIS_URL=redis://redis_broker:6379/0
-      - MONGO_URI=mongodb://mongo_db:27017
-      - MONGO_DB_NAME=hpc_cluster_db
-      - SERVER_IP=192.168.1.8
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    depends_on:
-      - redis_broker
-      - mongo_db
-    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      - NVIDIA_VISIBLE_DEVICES=all # Hace todas las GPUs visibles para el contenedor
+    networks:
+      - app-network
 
   redis_broker:
     image: redis:alpine
     container_name: hpc_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
 
   mongo_db:
+    ports:
+      - "27017:27017"
+    networks:
+      - app-network
     image: mongo:latest
     container_name: hpc_mongo
     volumes:
       - mongo_data:/data/db
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   mongo_data:

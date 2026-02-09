@@ -1,21 +1,22 @@
-# Imagen base oficial de NVIDIA con CUDA 11.8 y Ubuntu 22.04
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
-WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Instalar Python y dependencias de sistema necesarias
 RUN apt-get update && apt-get install -y \
+    python3.10 \
     python3-pip \
-    python3-dev \
+    python3.10-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Asegurar que 'python' y 'pip' apunten a la versión 3
-RUN ln -s /usr/bin/python3 /usr/bin/python
-
-COPY requirements.txt .
+WORKDIR /app
+COPY ./requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-RUN mkdir -p uploads files_temp
+COPY . /app/
+RUN mkdir -p /app/uploads
+EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -4,44 +4,76 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panel de Control HPC</title>
+  <title>HPC Image Studio</title>
   <link rel="stylesheet" href="/static/style.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono&display=swap"
     rel="stylesheet">
   <style>
-    /* Estilos extra para los workers detallados */
-    .worker-card {
-      background: #2D2D2D;
-      border: 1px solid #333;
-      padding: 10px;
-      margin-bottom: 5px;
+    /* Estilos específicos para Demo de Imagen */
+    .image-stage {
       display: flex;
-      justify-content: space-between;
+      justify-content: space-around;
       align-items: center;
-      border-left: 3px solid var(--success);
+      margin: 20px 0;
+      min-height: 200px;
     }
 
-    .worker-info h4 {
-      margin: 0;
-      font-size: 0.85rem;
-      color: #fff;
+    .stage-box {
+      border: 2px dashed #444;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      width: 30%;
+      background: #1e1e1e;
+      position: relative;
     }
 
-    .worker-info small {
-      color: #888;
+    .stage-arrow {
+      font-size: 2rem;
+      color: #666;
+    }
+
+    .workers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .worker-node {
+      background: #333;
+      padding: 5px;
       font-size: 0.7rem;
+      border-radius: 4px;
+      border: 1px solid #555;
     }
 
-    .worker-stats {
-      text-align: right;
+    .img-preview {
+      max-width: 100%;
+      max-height: 200px;
+      display: block;
+      margin: 0 auto;
+      border-radius: 4px;
     }
 
-    .worker-badge {
+    #drop-zone {
+      border: 2px dashed var(--primary);
+      padding: 40px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    #drop-zone:hover {
+      background: #2A2A2A;
+    }
+
+    .stat-badge {
+      font-family: 'JetBrains Mono', monospace;
       background: #000;
+      padding: 4px 8px;
+      border-radius: 4px;
       color: var(--success);
-      padding: 2px 6px;
-      font-size: 0.7rem;
-      border-radius: 2px;
+      font-size: 0.8rem;
     }
   </style>
 </head>
@@ -49,78 +81,110 @@
 <body>
   <div class="container">
     <header>
-      <div class="logo">HPC <span>CONTROL DE CLUSTER</span></div>
+      <div class="logo">HPC <span>DISTRIBUTED CUDA STUDIO</span></div>
       <div class="system-status">
-        <div><span class="status-dot"></span> WORKERS: <span id="online-nodes">0</span></div>
-        <div>TAREAS: <span id="active-tasks">0</span></div>
+        <div>WORKERS: <span id="online-nodes">0</span></div>
       </div>
     </header>
 
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('dashboard')">PANEL PRINCIPAL</button>
-      <button class="tab-btn" onclick="switchTab('history')">HISTORIAL</button>
-    </div>
-
     <div class="main-content">
-      <!-- PANEL PRINCIPAL -->
-      <div id="dashboard" class="tab-pane active">
-        <div class="dashboard-grid">
-          <!-- Tarjeta: Procesamiento Archivos -->
-          <div class="card">
-            <h2>Procesamiento de Archivos</h2>
-            <p style="font-size: 0.8rem; color: #888; margin-bottom: 20px;">
-              Sube Datasets grandes o PDFs para distribuirlos entre los nodos.
-            </p>
-            <input type="file" id="file-input" hidden>
-            <button class="btn-action" onclick="document.getElementById('file-input').click()">SUBIR ARCHIVO</button>
-            <div id="upload-msg" style="margin-top:10px; font-size: 0.8rem;"></div>
-          </div>
 
-          <!-- Tarjeta: Cálculo Matemático -->
-          <div class="card">
-            <h2>Computación Distribuida</h2>
-            <p style="font-size: 0.8rem; color: #888; margin-bottom: 10px;">
-              Lanzar búsqueda distribuida de Números Primos.
-            </p>
-            <div style="display: flex; gap: 10px;">
-              <input type="number" id="prime-start" placeholder="Inicio" value="1">
-              <input type="number" id="prime-end" placeholder="Fin" value="100000">
-            </div>
-            <button class="btn-action" onclick="submitPrimeJob()">EJECUTAR TRABAJO</button>
-            <div id="computation-msg" style="margin-top:10px; font-size: 0.8rem;"></div>
-          </div>
+      <!-- UPLOAD SECTION -->
+      <div class="card" id="upload-card">
+        <h2>1. Subir Imagen Pesada</h2>
+        <p style="color:#888; margin-bottom:15px">La imagen será dividida y procesada en paralelo por los workers
+          disponibles.</p>
 
-          <!-- Tarjeta: Estado del Sistema -->
-          <div class="card">
-            <h2>Estado de los Nodos</h2>
-            <div id="nodes-container">
-              <!-- Los workers se renderizan aquí -->
-            </div>
-          </div>
+        <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <h3>Arrastra una imagen aquí o haz click</h3>
+          <p style="font-size:0.8rem; color:#666">Soporta JPG, PNG (Max 10MB para demo)</p>
+          <input type="file" id="file-input" hidden accept="image/*">
+        </div>
+
+        <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+          <label>Chunks (Partes):</label>
+          <select id="chunk-select" style="padding: 5px; background: #333; color: #fff; border: 1px solid #555;">
+            <option value="2">2 Partes</option>
+            <option value="4">4 Partes</option>
+            <option value="8">8 Partes</option>
+          </select>
         </div>
       </div>
 
+      <!-- VISUALIZATION SECTION -->
+      <div class="card" id="process-card" style="display:none">
+        <h2>2. Procesamiento Distribuido en Tiempo Real</h2>
 
+        <div class="image-stage">
+          <!-- INPUT -->
+          <div class="stage-box">
+            <h4>Original</h4>
+            <img id="input-preview" class="img-preview" src="">
+            <div style="font-size:0.7rem; color:#888; margin-top:5px" id="input-info"></div>
+          </div>
 
-      <!-- HISTORIAL -->
-      <div id="history" class="tab-pane">
-        <table>
-          <thead>
-            <tr>
-              <th>ARCHIVO/TRABAJO</th>
-              <th>TIPO</th>
-              <th>ESTADO</th>
-              <th>WORKER</th>
-              <th>ACCIÓN</th>
-            </tr>
-          </thead>
-          <tbody id="jobs-table"></tbody>
-        </table>
+          <div class="stage-arrow">➜</div>
+
+          <!-- PROCESSING -->
+          <div class="stage-box">
+            <h4>Cluster (GPU Workers)</h4>
+            <div id="cluster-status-text" style="color: var(--warning); margin-bottom: 10px;">En Espera...</div>
+            <div class="workers-grid" id="workers-grid">
+              <!-- Dinamico -->
+            </div>
+          </div>
+
+          <div class="stage-arrow">➜</div>
+
+          <!-- OUTPUT -->
+          <div class="stage-box">
+            <h4>Resultado (Filtro Sobel)</h4>
+            <img id="output-preview" class="img-preview" style="display:none">
+            <div id="output-loader" style="display:none">⏳ Uniendo...</div>
+          </div>
+        </div>
+
+        <!-- STATS -->
+        <div class="card" style="background:#222; border:1px solid #333">
+          <h3>Estadísticas del Job</h3>
+          <div class="stats-grid"
+            style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; text-align:center">
+            <div>
+              <div style="color:#888; font-size:0.8rem">Tiempo Total GPU</div>
+              <div class="stat-badge" id="stat-gpu">0.00s</div>
+            </div>
+            <div>
+              <div style="color:#888; font-size:0.8rem">Workers Usados</div>
+              <div class="stat-badge" id="stat-workers">0</div>
+            </div>
+            <div>
+              <div style="color:#888; font-size:0.8rem">Estado</div>
+              <div class="stat-badge" style="color:#fff" id="stat-status">-</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 15px;">
+            <h4>Detalle por Chunk</h4>
+            <table style="width:100%; font-size:0.8rem; text-align:left; color:#ccc">
+              <thead>
+                <tr>
+                  <th>Chunk</th>
+                  <th>Worker</th>
+                  <th>GPU Time</th>
+                  <th>Dispositivo</th>
+                </tr>
+              </thead>
+              <tbody id="chunk-details-body"></tbody>
+            </table>
+          </div>
+
+          <button class="btn-action" style="background:#444; margin-top:15px" onclick="location.reload()">NUEVA
+            IMAGEN</button>
+        </div>
       </div>
 
     </div>
   </div>
-
   <script src="/static/script.js"></script>
 </body>
 

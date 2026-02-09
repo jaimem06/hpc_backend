@@ -9,5 +9,7 @@ pydantic
 pydantic-settings
 python-dotenv
 # --- Librerías para soporte GPU ---
-cupy-cuda11x
-pycuda
+cupy-cuda12x
+# pycuda
+pillow
+numpy
